@@ -1,0 +1,46 @@
+name: DB Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Run migrate deploy (true) or full seed (false)?'
+        required: true
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - name: Cache Prisma engines
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/prisma
+          key: ${{ runner.os }}-prisma-${{ hashFiles('**/pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+
+      - name: Migrate deploy
+        if: inputs.deploy == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pnpm -C packages/db migrate:deploy
+
+      - name: Full migrate + seed
+        if: inputs.deploy != 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pnpm -C packages/db generate
+          pnpm -C packages/db migrate:deploy
+          pnpm -C packages/db seed

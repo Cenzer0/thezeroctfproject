@@ -1,0 +1,33 @@
+# Traefik static configuration (mounted into /etc/traefik/traefik.yml)
+# - Dashboard enabled on :8080 (insecure for simplicity; protect in production)
+# - Ping endpoint exposed on :8080/ping (used by healthcheck)
+# - Docker provider enabled via flags in compose
+
+api:
+  dashboard: true
+  insecure: true
+
+ping: {}
+
+log:
+  level: INFO
+
+accessLog: {}
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+# Example container labels (already set in docker-compose.prod.yml):
+#   - "traefik.enable=true"
+#   - "traefik.http.routers.web.rule=Host(`ctf.example.com`)"
+#   - "traefik.http.routers.web.entrypoints=websecure"
+#   - "traefik.http.routers.web.tls.certresolver=le"
+#   - "traefik.http.services.web.loadbalancer.server.port=3000"
+#
+#   - "traefik.http.routers.api.rule=Host(`api.ctf.example.com`)"
+#   - "traefik.http.routers.api.entrypoints=websecure"
+#   - "traefik.http.routers.api.tls.certresolver=le"
+#   - "traefik.http.services.api.loadbalancer.server.port=4000"

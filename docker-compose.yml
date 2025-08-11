@@ -1,0 +1,113 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:16
+    container_name: ctf_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ctf
+    ports:
+      - '5432:5432'
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: ctf_redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+
+  minio:
+    image: minio/minio:latest
+    container_name: ctf_minio
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    command: server /data --console-address ":9001"
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio_data:/data
+
+  traefik:
+    image: traefik:v3.1
+    container_name: ctf_traefik
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  api:
+    build:
+      context: .
+      dockerfile: ./apps/api/Dockerfile
+    container_name: ctf_api
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ctf
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: minio
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio12345
+      PORT: 4000
+    depends_on:
+      - postgres
+      - redis
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.localhost`)"
+      - "traefik.http.services.api.loadbalancer.server.port=4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile
+    container_name: ctf_web
+    env_file:
+      - ./.env
+    environment:
+      NEXTAUTH_URL: http://web.localhost
+      NEXTAUTH_SECRET: devsecret
+      NEXT_PUBLIC_API_URL: http://api.localhost
+      PORT: 3000
+    depends_on:
+      - api
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.web.rule=Host(`web.localhost`)"
+      - "traefik.http.services.web.loadbalancer.server.port=3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: ./apps/api/Dockerfile
+    container_name: ctf_worker
+    command: ["node", "dist/main.js", "--worker"]
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ctf
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  pg_data:
+  redis_data:
+  minio_data:

@@ -1,0 +1,291 @@
+// Prisma schema for CTF Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  MOD
+  ADMIN
+  CREATOR
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ChallengeKind {
+  CHALLENGE
+  MACHINE
+}
+
+enum BadgeType {
+  STREAK
+  BLOOD
+  TOP10
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String?
+  image        String?
+  password     String?
+  totpSecret   String?
+  role         Role          @default(USER)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  sessions     Session[]
+  submissions  Submission[]
+  memberships  TeamMember[]
+  scoreEvents  ScoreEvent[]
+  instances    Instance[]
+  bloods       Blood[]
+  auditLogs    AuditLog[]
+  hintClaims    HintClaim[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  sessionToken String   @unique
+  expires      DateTime
+  createdAt    DateTime @default(now())
+}
+
+model Team {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  inviteCode  String       @unique @default(cuid())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  members     TeamMember[]
+  scoreEvents ScoreEvent[]
+  bloods      Blood[]
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      TeamRole @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  team      Team     @relation(fields: [teamId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([teamId, userId])
+}
+
+model Season {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+  badges    Badge[]
+}
+
+model Badge {
+  id        String    @id @default(cuid())
+  userId    String
+  seasonId  String?
+  type      BadgeType
+  label     String
+  data      Json?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  season    Season?   @relation(fields: [seasonId], references: [id])
+
+  @@index([userId, seasonId])
+}
+
+model DiscordConfig {
+  id        String   @id @default(cuid())
+  webhookUrl String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model ArchivedChallenge {
+  id           String   @id @default(cuid())
+  originalId   String   @unique
+  slug         String   @unique
+  title        String
+  description  String
+  writeupUrl   String?
+  archivedAt   DateTime @default(now())
+}
+
+model Challenge {
+  id          String               @id @default(cuid())
+  title       String
+  slug        String               @unique
+  description String
+  points      Int                  @default(100)
+  flagRegex   String
+  isPublished Boolean              @default(false)
+  retiredAt   DateTime?
+  kind        ChallengeKind        @default(CHALLENGE)
+  // For MACHINE kind: metadata may include network notes, services [{name,port}], vpnRequired
+  metadata    Json?
+  tags        Tag[]
+  hints       ChallengeHint[]
+  attachments ChallengeAttachment[]
+  instances   Instance[]
+  submissions Submission[]
+  scoreEvents ScoreEvent[]
+  blood       Blood?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+}
+
+model ChallengeHint {
+  id          String    @id @default(cuid())
+  challengeId String
+  order       Int       @default(0)
+  text        String
+  cost        Int       @default(0)
+
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+  claims      HintClaim[]
+}
+
+model HintClaim {
+  id        String   @id @default(cuid())
+  userId    String
+  hintId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  hint      ChallengeHint @relation(fields: [hintId], references: [id])
+
+  @@unique([userId, hintId])
+}
+
+model ChallengeAttachment {
+  id           String    @id @default(cuid())
+  challengeId  String
+  objectKey    String
+  filename     String
+  contentType  String
+  size         Int
+  createdAt    DateTime  @default(now())
+
+  challenge    Challenge @relation(fields: [challengeId], references: [id])
+
+  @@index([challengeId])
+  @@unique([challengeId, objectKey])
+}
+
+model Tag {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  challenges  Challenge[]
+}
+
+model Instance {
+  id           String    @id @default(cuid())
+  userId       String
+  challengeId  String
+  status       String    @default("stopped") // stopped|spawning|running|stopping|error
+  ttlAt        DateTime?
+  lastExtended DateTime?
+  host         String?
+  port         Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id])
+  challenge    Challenge @relation(fields: [challengeId], references: [id])
+
+  @@unique([userId, challengeId])
+}
+
+model Submission {
+  id          String   @id @default(cuid())
+  userId      String
+  challengeId String
+  flag        String
+  correct     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+}
+
+model ScoreEvent {
+  id          String    @id @default(cuid())
+  userId      String?
+  teamId      String?
+  challengeId String
+  points      Int
+  reason      String
+  createdAt   DateTime  @default(now())
+
+  user        User?     @relation(fields: [userId], references: [id])
+  team        Team?     @relation(fields: [teamId], references: [id])
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+}
+
+model Blood {
+  id          String    @id @default(cuid())
+  challengeId String
+  userId      String
+  teamId      String?
+  rank        Int
+  createdAt   DateTime  @default(now())
+
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+  team        Team?     @relation(fields: [teamId], references: [id])
+
+  @@unique([challengeId, rank])
+  @@unique([challengeId, userId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String?
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  actor     User?    @relation(fields: [actorId], references: [id])
+}
+
+model WebhookEndpoint {
+  id        String   @id @default(cuid())
+  url       String   @unique
+  secret    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  deliveries WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  endpointId String
+  event      String
+  payload    Json
+  status     Int
+  error      String?
+  createdAt  DateTime @default(now())
+
+  endpoint   WebhookEndpoint @relation(fields: [endpointId], references: [id])
+}
