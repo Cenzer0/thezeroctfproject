@@ -18,14 +18,19 @@
     "format": "prettier -w .",
     "db:migrate": "pnpm -C packages/db migrate",
     "db:seed": "pnpm -C packages/db seed",
-    "prisma:gen": "pnpm -w --filter @ctf/db run prisma:generate"
+    "prisma:gen": "pnpm -C packages/db prisma:generate",
+    "prisma:migrate": "pnpm -C packages/db migrate:deploy"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@types/node": "^20",
+    "eslint": "^9",
     "eslint-config-next": "^15.0.0-canary.88",
     "prettier": "^3.3.3",
+    "rimraf": "^5",
+    "tsup": "^8",
     "turbo": "^2.0.6",
-    "typescript": "^5.5.4",
+    "typescript": "^5",
     "typescript-eslint": "^8.39.0"
   }
 }

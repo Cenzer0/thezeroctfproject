@@ -5,7 +5,7 @@ import {
 } from '@tanstack/react-table';
 
 type DataTableProps<TData extends object> = {
-  columns: ColumnDef<TData, any>[];
+  columns: ColumnDef<TData, unknown>[];
   data: TData[];
 };
 
